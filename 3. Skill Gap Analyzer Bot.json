@@ -1,0 +1,375 @@
+{
+  "name": "3. Skill Gap Analyzer Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "🎯 Skill Gap Analyzer",
+        "formDescription": "Discover the skills you need to achieve your career goals.\n\nUpload your resume and choose your target job role. The system will analyze your current skills, identify skill gaps, generate a readiness score, recommend projects, and provide a personalized learning roadmap delivered directly to your email.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Full Name"
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email"
+            },
+            {
+              "fieldLabel": "Target Job Role",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "AI Automation Developer"
+                  },
+                  {
+                    "option": "AI Engineer"
+                  },
+                  {
+                    "option": "Data Scientist"
+                  },
+                  {
+                    "option": "Full Stack Developer"
+                  },
+                  {
+                    "option": "Python Developer Full Stack Developer"
+                  },
+                  {
+                    "option": "Backend Developer"
+                  },
+                  {
+                    "option": "UI/UX Designer"
+                  },
+                  {
+                    "option": "Business Analyst"
+                  },
+                  {
+                    "option": "Software Developer"
+                  },
+                  {
+                    "option": "DevOps Engineer"
+                  },
+                  {
+                    "option": "Cloud Engineer"
+                  },
+                  {
+                    "option": "Cyber Security Analyst"
+                  },
+                  {
+                    "option": "Mobile App Developer"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Resume Pdf",
+              "fieldType": "file",
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ec40444c-b51a-4203-a7bb-fd060f29b87f",
+      "name": "On form submission",
+      "webhookId": "26953ab7-876c-4374-9ae2-dc7b95937225"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "Resume_Pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a0dd4a72-988c-4264-89f3-b68169a3ebab",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Target Job Role:\n\n{{ $('On form submission').item.json['Target Job Role'] }}\n\nResume Content:\n\n{{ $json.text }}",
+        "options": {
+          "systemMessage": "=You are an expert Skill Gap Analyzer.\n\nAnalyze the candidate resume and compare it with the target job role.\n\nProvide:\n\n1. Current Skills\n2. Required Skills\n3. Missing Skills\n4. Job Readiness Score (0-100)\n5. Learning Roadmap\n6. Recommended Projects\n7. Final Recommendation\n\nReturn output in JSON format:\n\n{\n \"current_skills\":\"\",\n \"required_skills\":\"\",\n \"missing_skills\":\"\",\n \"readiness_score\":\"\",\n \"learning_roadmap\":\"\",\n \"recommended_projects\":\"\",\n \"recommendation\":\"\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        384,
+        0
+      ],
+      "id": "09295b29-49c4-48d3-96c0-81ca26349784",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        208
+      ],
+      "id": "493f907b-f0db-43ff-80cb-91685072d7db",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Sp4zKXxQlvVpb9PP",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = JSON.parse($input.first().json.output);\n\n\n// =====================================================\n// HELPERS\n// =====================================================\n\nfunction escapeHtml(value) {\n  if (value === null || value === undefined) return \"\";\n\n  return String(value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#039;\");\n}\n\n\nfunction normalizeList(value) {\n\n  if (!value) return [];\n\n  if (Array.isArray(value)) {\n    return value\n      .map(item => String(item).trim())\n      .filter(Boolean);\n  }\n\n  return String(value)\n    .split(/[•\\n]/)\n    .map(item => item\n      .replace(/^[-*]\\s*/, \"\")\n      .trim()\n    )\n    .filter(Boolean);\n}\n\n\n// =====================================================\n// DATA\n// =====================================================\n\nconst score = Math.max(\n  0,\n  Math.min(\n    100,\n    Number(data.readiness_score) || 0\n  )\n);\n\n\nconst currentSkills =\n  normalizeList(data.current_skills);\n\n\nconst missingSkills =\n  normalizeList(data.missing_skills);\n\n\nconst roadmap =\n  normalizeList(data.learning_roadmap);\n\n\nconst recommendation =\n  escapeHtml(data.recommendation);\n\n\n// =====================================================\n// SCORE STATUS\n// =====================================================\n\nlet scoreColor = \"#dc2626\";\nlet scoreLight = \"#fef2f2\";\nlet scoreBorder = \"#fecaca\";\nlet status = \"Needs Improvement\";\nlet statusIcon = \"⚠️\";\n\nif (score >= 80) {\n\n  scoreColor = \"#16a34a\";\n  scoreLight = \"#f0fdf4\";\n  scoreBorder = \"#bbf7d0\";\n\n  status = \"Job Ready\";\n  statusIcon = \"🚀\";\n\n} else if (score >= 60) {\n\n  scoreColor = \"#d97706\";\n  scoreLight = \"#fffbeb\";\n  scoreBorder = \"#fde68a\";\n\n  status = \"Almost Ready\";\n  statusIcon = \"📈\";\n}\n\n\n// =====================================================\n// SKILL CHIPS\n// =====================================================\n\nfunction createSkillChips(items) {\n\n  if (!items.length) {\n\n    return `\n      <span style=\"\n        color:#64748b;\n        font-size:13px;\n      \">\n        No skills identified.\n      </span>\n    `;\n\n  }\n\n  return items.map(skill => `\n\n    <span style=\"\n      display:inline-block;\n      background:#ffffff;\n      border:1px solid #dbe3ec;\n      border-radius:18px;\n      padding:7px 12px;\n      margin:3px 3px 3px 0;\n      color:#334155;\n      font-size:12px;\n      font-weight:500;\n    \">\n      ${escapeHtml(skill)}\n    </span>\n\n  `).join(\"\");\n\n}\n\n\n// =====================================================\n// ROADMAP\n// =====================================================\n\nfunction createRoadmap(items) {\n\n  if (!items.length) {\n\n    return `\n      <p style=\"\n        margin:0;\n        color:#64748b;\n        font-size:13px;\n      \">\n        No roadmap available.\n      </p>\n    `;\n\n  }\n\n  return items.map((item, index) => `\n\n    <table\n      width=\"100%\"\n      cellpadding=\"0\"\n      cellspacing=\"0\"\n      border=\"0\"\n      style=\"margin-bottom:14px;\"\n    >\n\n      <tr>\n\n        <td\n          width=\"42\"\n          valign=\"top\"\n          style=\"padding-right:12px;\"\n        >\n\n          <div style=\"\n            width:34px;\n            height:34px;\n            line-height:34px;\n            text-align:center;\n            background:#2563eb;\n            color:#ffffff;\n            border-radius:50%;\n            font-size:12px;\n            font-weight:bold;\n          \">\n            ${String(index + 1).padStart(2, \"0\")}\n          </div>\n\n        </td>\n\n\n        <td\n          valign=\"middle\"\n          style=\"\n            padding:5px 0;\n            color:#334155;\n            font-size:13px;\n            line-height:1.6;\n          \"\n        >\n\n          ${escapeHtml(item)}\n\n        </td>\n\n      </tr>\n\n    </table>\n\n  `).join(\"\");\n\n}\n\n\n// =====================================================\n// EMAIL\n// =====================================================\n\nreturn [{\n  json: {\n\n    score: score,\n\n    missing_skills: data.missing_skills,\n\n    recommendation: data.recommendation,\n\n    subject:\n      `🎯 Skill Gap Analysis Report | ${score}% Readiness`,\n\n    html: `\n\n<!DOCTYPE html>\n\n<html>\n\n<head>\n\n<meta charset=\"UTF-8\">\n\n<meta name=\"viewport\"\ncontent=\"width=device-width, initial-scale=1.0\">\n\n<title>Skill Gap Analysis</title>\n\n</head>\n\n\n<body style=\"\nmargin:0;\npadding:0;\nbackground:#f3f6fa;\nfont-family:Arial,Helvetica,sans-serif;\ncolor:#1e293b;\n\">\n\n\n<!-- OUTER -->\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"background:#f3f6fa;\"\n>\n\n<tr>\n\n<td\nalign=\"center\"\nstyle=\"padding:30px 12px;\"\n>\n\n\n<!-- MAIN CONTAINER -->\n\n<table\nwidth=\"680\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"\nwidth:100%;\nmax-width:680px;\nbackground:#ffffff;\nborder:1px solid #e5e7eb;\nborder-radius:16px;\noverflow:hidden;\n\"\n>\n\n\n<!-- ================================================= -->\n<!-- HEADER -->\n<!-- ================================================= -->\n\n<tr>\n\n<td\nstyle=\"\nbackground:#1d4ed8;\npadding:30px 34px;\n\"\n>\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\n>\n\n<tr>\n\n<td>\n\n<div style=\"\nfont-size:11px;\nfont-weight:bold;\nletter-spacing:1.5px;\ncolor:#bfdbfe;\ntext-transform:uppercase;\nmargin-bottom:7px;\n\">\nCAREER INTELLIGENCE\n</div>\n\n\n<div style=\"\nfont-size:27px;\nfont-weight:bold;\nline-height:1.25;\ncolor:#ffffff;\n\">\nSkill Gap Analysis\n</div>\n\n\n<div style=\"\nfont-size:13px;\ncolor:#dbeafe;\nmargin-top:7px;\n\">\nPersonalized Job Readiness Report\n</div>\n\n</td>\n\n\n<td\nwidth=\"95\"\nalign=\"right\"\nvalign=\"middle\"\n>\n\n<div style=\"\ndisplay:inline-block;\nbackground:#3b82f6;\nborder:1px solid #60a5fa;\nborder-radius:8px;\npadding:8px 10px;\ncolor:#ffffff;\nfont-size:10px;\nfont-weight:bold;\n\">\nAI POWERED\n</div>\n\n</td>\n\n</tr>\n\n</table>\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- SCORE AREA -->\n<!-- ================================================= -->\n\n<tr>\n\n<td style=\"padding:28px 34px 24px;\">\n\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\n>\n\n<tr>\n\n\n<!-- SCORE COLUMN -->\n\n<td\nwidth=\"175\"\nalign=\"center\"\nvalign=\"middle\"\n>\n\n\n<!-- CIRCLE -->\n\n<table\nwidth=\"128\"\nheight=\"128\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"\nwidth:128px;\nheight:128px;\nborder:8px solid ${scoreColor};\nborder-radius:50%;\nbackground:${scoreLight};\n\"\n>\n\n<tr>\n\n<td\nalign=\"center\"\nvalign=\"middle\"\n>\n\n<div style=\"\nfont-size:32px;\nfont-weight:bold;\nline-height:1;\ncolor:${scoreColor};\n\">\n${score}%\n</div>\n\n<div style=\"\nfont-size:10px;\ncolor:#64748b;\nmargin-top:6px;\nfont-weight:bold;\ntext-transform:uppercase;\n\">\nReadiness\n</div>\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n\n<!-- STATUS COLUMN -->\n\n<td\nvalign=\"middle\"\nstyle=\"\npadding-left:24px;\n\"\n>\n\n<div style=\"\nfont-size:10px;\nfont-weight:bold;\nletter-spacing:1px;\ncolor:#94a3b8;\nmargin-bottom:7px;\n\">\nOVERALL STATUS\n</div>\n\n\n<div style=\"\nfont-size:23px;\nfont-weight:bold;\ncolor:${scoreColor};\nmargin-bottom:8px;\n\">\n${statusIcon} ${status}\n</div>\n\n\n<p style=\"\nmargin:0;\nfont-size:13px;\nline-height:1.6;\ncolor:#64748b;\n\">\nYour profile has been analyzed against the\nskills and requirements of the target role.\n</p>\n\n\n</td>\n\n\n</tr>\n\n</table>\n\n\n\n<!-- PROGRESS -->\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"margin-top:25px;\"\n>\n\n<tr>\n\n<td\nstyle=\"\nheight:8px;\nbackground:#e5e7eb;\nborder-radius:10px;\nfont-size:0;\nline-height:0;\n\"\n>\n\n<div style=\"\nheight:8px;\nwidth:${score}%;\nbackground:${scoreColor};\nborder-radius:10px;\nfont-size:0;\nline-height:0;\n\">\n&nbsp;\n</div>\n\n</td>\n\n</tr>\n\n</table>\n\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"margin-top:6px;\"\n>\n\n<tr>\n\n<td style=\"\nfont-size:9px;\ncolor:#94a3b8;\n\">\n0%\n</td>\n\n<td\nalign=\"center\"\nstyle=\"\nfont-size:9px;\ncolor:#94a3b8;\n\">\n50%\n</td>\n\n<td\nalign=\"right\"\nstyle=\"\nfont-size:9px;\ncolor:#94a3b8;\n\">\n100%\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- CURRENT SKILLS -->\n<!-- ================================================= -->\n\n<tr>\n\n<td style=\"\npadding:0 34px 16px;\n\">\n\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"\nbackground:#f0fdf4;\nborder:1px solid #bbf7d0;\nborder-radius:12px;\n\"\n>\n\n<tr>\n\n<td style=\"padding:20px;\">\n\n\n<table\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\n>\n\n<tr>\n\n<td\nwidth=\"35\"\nvalign=\"top\"\nstyle=\"\nfont-size:20px;\npadding-right:10px;\n\"\n>\n✓\n</td>\n\n<td>\n\n<div style=\"\nfont-size:16px;\nfont-weight:bold;\ncolor:#166534;\n\">\nCurrent Skills\n</div>\n\n<div style=\"\nfont-size:11px;\ncolor:#64748b;\nmargin-top:5px;\nmargin-bottom:12px;\n\">\nSkills identified from your profile\n</div>\n\n\n<div>\n\n${createSkillChips(currentSkills)}\n\n</div>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- MISSING SKILLS -->\n<!-- ================================================= -->\n\n<tr>\n\n<td style=\"\npadding:0 34px 16px;\n\">\n\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"\nbackground:#fff7f7;\nborder:1px solid #fecaca;\nborder-radius:12px;\n\"\n>\n\n<tr>\n\n<td style=\"padding:20px;\">\n\n\n<table\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\n>\n\n<tr>\n\n<td\nwidth=\"35\"\nvalign=\"top\"\nstyle=\"\nfont-size:20px;\npadding-right:10px;\n\"\n>\n!\n</td>\n\n<td>\n\n<div style=\"\nfont-size:16px;\nfont-weight:bold;\ncolor:#b91c1c;\n\">\nSkills to Improve\n</div>\n\n<div style=\"\nfont-size:11px;\ncolor:#64748b;\nmargin-top:5px;\nmargin-bottom:12px;\n\">\nSkills that can improve your job readiness\n</div>\n\n\n<div>\n\n${createSkillChips(missingSkills)}\n\n</div>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- ROADMAP -->\n<!-- ================================================= -->\n\n<tr>\n\n<td style=\"\npadding:0 34px 16px;\n\">\n\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"\nbackground:#fffbeb;\nborder:1px solid #fde68a;\nborder-radius:12px;\n\"\n>\n\n<tr>\n\n<td style=\"padding:20px;\">\n\n\n<table\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\n>\n\n<tr>\n\n<td\nwidth=\"35\"\nvalign=\"top\"\nstyle=\"\nfont-size:20px;\npadding-right:10px;\n\"\n>\n→\n</td>\n\n<td>\n\n<div style=\"\nfont-size:16px;\nfont-weight:bold;\ncolor:#a16207;\n\">\nRecommended Learning Roadmap\n</div>\n\n<div style=\"\nfont-size:11px;\ncolor:#64748b;\nmargin-top:5px;\nmargin-bottom:18px;\n\">\nA practical path to close your skill gaps\n</div>\n\n\n${createRoadmap(roadmap)}\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- RECOMMENDATION -->\n<!-- ================================================= -->\n\n<tr>\n\n<td style=\"\npadding:0 34px 25px;\n\">\n\n\n<table\nwidth=\"100%\"\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\nstyle=\"\nbackground:#eff6ff;\nborder:1px solid #bfdbfe;\nborder-radius:12px;\n\"\n>\n\n<tr>\n\n<td style=\"padding:20px;\">\n\n\n<table\ncellpadding=\"0\"\ncellspacing=\"0\"\nborder=\"0\"\n>\n\n<tr>\n\n<td\nwidth=\"35\"\nvalign=\"top\"\nstyle=\"\nfont-size:20px;\npadding-right:10px;\n\"\n>\n💡\n</td>\n\n<td>\n\n<div style=\"\nfont-size:16px;\nfont-weight:bold;\ncolor:#1d4ed8;\n\">\nCareer Recommendation\n</div>\n\n<div style=\"\nfont-size:13px;\nline-height:1.7;\ncolor:#475569;\nmargin-top:10px;\n\">\n${recommendation}\n</div>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- NEXT STEP -->\n<!-- ================================================= -->\n\n<tr>\n\n<td\nalign=\"center\"\nstyle=\"\nbackground:#f8fafc;\nborder-top:1px solid #e5e7eb;\npadding:24px 30px;\n\"\n>\n\n<div style=\"\nfont-size:15px;\nfont-weight:bold;\ncolor:#1e293b;\n\">\n🚀 Ready for the next step?\n</div>\n\n<p style=\"\nmargin:7px auto 0;\nmax-width:480px;\nfont-size:12px;\nline-height:1.6;\ncolor:#64748b;\n\">\nFocus on the identified skill gaps, follow the learning\nroadmap and build practical projects to strengthen your profile.\n</p>\n\n\n</td>\n\n</tr>\n\n\n\n<!-- ================================================= -->\n<!-- FOOTER -->\n<!-- ================================================= -->\n\n<tr>\n\n<td\nalign=\"center\"\nstyle=\"\npadding:18px 30px;\nbackground:#ffffff;\n\"\n>\n\n<div style=\"\nfont-size:11px;\nfont-weight:bold;\ncolor:#64748b;\n\">\nSkill Gap Analyzer\n</div>\n\n<div style=\"\nfont-size:10px;\ncolor:#94a3b8;\nmargin-top:5px;\n\">\nAI-powered career intelligence\n</div>\n\n<div style=\"\nfont-size:9px;\ncolor:#cbd5e1;\nmargin-top:7px;\n\">\nThis report is generated automatically for career guidance.\n</div>\n\n</td>\n\n</tr>\n\n\n</table>\n\n\n<div style=\"\nfont-size:9px;\ncolor:#94a3b8;\nmargin-top:12px;\ntext-align:center;\n\">\nGenerated by Skill Gap Analyzer\n</div>\n\n\n</td>\n\n</tr>\n\n</table>\n\n\n</body>\n\n</html>\n\n`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        0
+      ],
+      "id": "5b50973d-7716-45ae-a37e-8c0d85dabc68",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1eQOv2QUOUUAqiyyH9EtIJ87QsjD_UEddWkClnUl7ZWE",
+          "mode": "list",
+          "cachedResultName": "Resume_Check",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eQOv2QUOUUAqiyyH9EtIJ87QsjD_UEddWkClnUl7ZWE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eQOv2QUOUUAqiyyH9EtIJ87QsjD_UEddWkClnUl7ZWE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Recommendation": "={{ $json.recommendation }}",
+            "Missing Skills": "={{ $json.missing_skills }}",
+            "Readiness Score": "={{ $json.score }}",
+            "Name": "={{ $('On form submission').item.json['Full Name'] }}",
+            "Email": "={{ $('On form submission').item.json.Email }}",
+            "Target Role": "={{ $('On form submission').item.json['Target Job Role'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Role",
+              "displayName": "Target Role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Readiness Score",
+              "displayName": "Readiness Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Missing Skills",
+              "displayName": "Missing Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Recommendation",
+              "displayName": "Recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        0
+      ],
+      "id": "07be2bcc-4d76-4cb7-8425-598a3a00f659",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MzwoOUE1QShM3dn3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('On form submission').item.json.Email }}",
+        "subject": "🎯 Your Skill Gap Analysis Report is Ready",
+        "message": "={{ $('Code in JavaScript').item.json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        0
+      ],
+      "id": "f6ab2019-b1ab-4ba7-bfbe-3bde35892607",
+      "name": "Send a message",
+      "webhookId": "bfdc5350-624a-48d5-96fe-0ffbf5781425",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "TYcLeJOouiWHPsWd",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2594c4da-75b8-4879-adc6-d04698e09539",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "87d4ac13c6fd4cc628c6f4a9844b140f57b6c6a41155ecdf03ddf13c773ab1b9"
+  },
+  "nodeGroups": [],
+  "id": "nKyTVL806ET2K2nX",
+  "tags": []
+}
